@@ -1,32 +1,14 @@
-# Serving configuration
 server:
-  host: "0.0.0.0"
+  host: 0.0.0.0
   port: 8000
   workers: 1
-  log_level: "info"
+  reload: true
 
 model:
-  default: "hybrid"
-  device: "cpu"
-  input_size: 512
-  batch_max: 10
-  warmup_on_start: true
+  model_dir: ./models
+  default_model: hybrid
+  image_size: 512
+  device: auto
 
-preprocessing:
-  resize: [512, 512]
-  normalize:
-    mean: [0.485, 0.456, 0.406]
-    std: [0.229, 0.224, 0.225]
-
-postprocessing:
-  threshold: 0.5
-  min_area: 100
-
-api:
-  title: "MedSeg API"
-  version: "0.1.0"
-  prefix: "/api/v1"
-  cors_origins: ["*"]
-  rate_limit:
-    requests: 100
-    window: 60
+database:
+  url: sqlite:///./predictions.db
