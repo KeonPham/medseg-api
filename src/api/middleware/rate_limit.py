@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple in-memory rate limiter per client IP."""
 
-    def __init__(
-        self, app: object, max_requests: int = 100, window_seconds: int = 60
-    ) -> None:
+    def __init__(self, app: object, max_requests: int = 100, window_seconds: int = 60) -> None:
         """Initialize rate limiter with request limit and time window."""
         super().__init__(app)
         self.max_requests = max_requests
@@ -28,9 +26,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = time.time()
         cutoff = now - self.window_seconds
 
-        self.requests[client_ip] = [
-            t for t in self.requests[client_ip] if t > cutoff
-        ]
+        self.requests[client_ip] = [t for t in self.requests[client_ip] if t > cutoff]
 
         if len(self.requests[client_ip]) >= self.max_requests:
             logger.warning("Rate limit exceeded for %s", client_ip)

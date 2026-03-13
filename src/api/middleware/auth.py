@@ -27,7 +27,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         key = request.headers.get("X-API-Key")
         if key != self.api_key:
-            logger.warning("Invalid API key from %s", request.client.host if request.client else "unknown")
+            client_host = request.client.host if request.client else "unknown"
+            logger.warning("Invalid API key from %s", client_host)
             return Response(content="Invalid API key", status_code=401)
 
         return await call_next(request)
