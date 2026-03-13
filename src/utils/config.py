@@ -8,16 +8,72 @@ from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
+_settings_instance: "Settings | None" = None
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
 
-    model_dir: Path = Path("./models")
+class ServerConfig(BaseSettings):
+    """Server configuration."""
+
+    host: str = "0.0.0.0"
+    port: int = 8000
+    workers: int = 1
+    reload: bool = False
+
+    model_config = {"env_prefix": "SERVER_"}
+
+
+class ModelConfig(BaseSettings):
+    """Model serving configuration."""
+
+    model_dir: str = "./models"
     default_model: str = "hybrid"
     image_size: int = 512
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
-    database_url: str = "sqlite:///./predictions.db"
+    device: str = "auto"
+
+    model_config = {"env_prefix": "MODEL_"}
+
+    def get_device(self) -> str:
+        """Resolve the compute device.
+
+        Returns:
+            'cuda' if available and device is 'auto', otherwise 'cpu' or the explicit value.
+        """
+        if self.device == "auto":
+            import torch
+
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        return self.device
+
+
+class TrainingConfig(BaseSettings):
+    """Training hyperparameter configuration."""
+
+    lr: float = 0.0005
+    batch_size: int = 32
+    epochs: int = 50
+    focal_alpha: float = 0.25
+    focal_gamma: float = 2.0
+    boundary_weight: float = 0.3
+    patience: int = 10
+
+    model_config = {"env_prefix": "TRAINING_"}
+
+
+class DatabaseConfig(BaseSettings):
+    """Database connection configuration."""
+
+    url: str = "sqlite:///./predictions.db"
+
+    model_config = {"env_prefix": "DATABASE_"}
+
+
+class Settings(BaseSettings):
+    """Top-level application settings composed of sub-configurations."""
+
+    server: ServerConfig = ServerConfig()
+    model: ModelConfig = ModelConfig()
+    training: TrainingConfig = TrainingConfig()
+    database: DatabaseConfig = DatabaseConfig()
     mlflow_tracking_uri: str = "./mlruns"
     api_key: str = "your-api-key-here"
 
@@ -46,9 +102,12 @@ def load_yaml_config(config_path: str | Path) -> dict:
 
 
 def get_settings() -> Settings:
-    """Create and return application settings instance.
+    """Return the application settings singleton.
 
     Returns:
-        Settings instance with values from environment.
+        Settings instance, created on first call and cached thereafter.
     """
-    return Settings()
+    global _settings_instance  # noqa: PLW0603
+    if _settings_instance is None:
+        _settings_instance = Settings()
+    return _settings_instance
