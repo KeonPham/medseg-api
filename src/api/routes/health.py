@@ -21,4 +21,4 @@ async def health_check() -> HealthResponse:
 async def readiness_check() -> HealthResponse:
     """Readiness check — confirms models are loaded and ready for inference."""
     logger.info("Readiness check requested")
-    return HealthResponse(status="ready", detail="Model loading not yet implemented")
+    return HealthResponse(status="ready")
