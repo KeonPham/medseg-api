@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from src.api.schemas.response import HealthResponse
 
@@ -17,8 +17,10 @@ async def health_check() -> HealthResponse:
     return HealthResponse(status="healthy")
 
 
-@router.get("/ready", response_model=HealthResponse)
-async def readiness_check() -> HealthResponse:
-    """Readiness check — confirms models are loaded and ready for inference."""
-    logger.info("Readiness check requested")
-    return HealthResponse(status="ready")
+@router.get("/ready")
+async def readiness_check(request: Request) -> dict:
+    """Readiness check — confirms models are registered and ready for inference."""
+    registry = request.app.state.registry
+    models = registry.list_models()
+    ready = len(models) > 0
+    return {"ready": ready}
