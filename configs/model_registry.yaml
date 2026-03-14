@@ -1,0 +1,29 @@
+models:
+  cnn_only:
+    architecture: cnn
+    versions:
+      v1:
+        path: models/cnn_only/lung_seg_cnn_v1.pth
+        metrics:
+          dice: 0.9418
+          iou: 0.8903
+          hd95: 26.7
+  vit_only:
+    architecture: vit
+    versions:
+      v1:
+        path: models/vit_only/lung_seg_vit_v1.pth
+        metrics:
+          dice: 0.9518
+          iou: 0.9082
+          hd95: 19.7
+  hybrid:
+    architecture: hybrid
+    versions:
+      v1:
+        path: models/hybrid/lung_seg_hybrid_v1.pth
+        metrics:
+          dice: 0.9665
+          iou: 0.9360
+          hd95: 4.2
+default_model: hybrid
