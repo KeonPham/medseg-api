@@ -1,0 +1,12 @@
+data/
+mlruns/
+.git
+__pycache__
+*.pth
+.env
+tests/
+monitoring/
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.pyc
