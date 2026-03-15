@@ -103,13 +103,28 @@ def mask_to_base64(mask: np.ndarray) -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
+def image_to_base64(image: np.ndarray) -> str:
+    """Encode an RGB uint8 image as a base64 PNG string.
+
+    Args:
+        image: RGB image array (H, W, 3) with dtype uint8.
+
+    Returns:
+        Base64-encoded PNG string.
+    """
+    img = Image.fromarray(image, mode="RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
 def overlay_mask(
     image: np.ndarray,
     mask: np.ndarray,
-    alpha: float = 0.4,
+    alpha: float = 0.3,
     color: tuple[int, int, int] = (0, 255, 0),
 ) -> np.ndarray:
-    """Create a colored overlay of the segmentation mask on the original image.
+    """Create a colored overlay with contour outline on the original image.
 
     Args:
         image: Original RGB image (H, W, 3).
@@ -118,11 +133,18 @@ def overlay_mask(
         color: RGB color for the mask overlay.
 
     Returns:
-        RGB image (H, W, 3) with mask overlay.
+        RGB image (H, W, 3) with mask overlay and contour.
     """
     overlay = image.copy()
     mask_bool = mask > 127
+
+    # Semi-transparent color fill on segmented region
     overlay[mask_bool] = (
         (1 - alpha) * overlay[mask_bool] + alpha * np.array(color, dtype=np.float64)
     ).astype(np.uint8)
+
+    # Draw contour outline for crisp boundary
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(overlay, contours, -1, color, thickness=2)
+
     return overlay

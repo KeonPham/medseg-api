@@ -12,6 +12,7 @@ from src.api.schemas.response import BatchResult, SegmentationResult
 from src.models.registry import ModelRegistry
 from src.utils.config import ModelConfig
 from src.utils.image import (
+    image_to_base64,
     load_image,
     mask_to_base64,
     overlay_mask,
@@ -128,7 +129,7 @@ class InferencePipeline:
         overlay_b64 = None
         if return_overlay:
             overlay_img = overlay_mask(image, mask)
-            overlay_b64 = mask_to_base64(overlay_img[:, :, 0])  # encode as grayscale
+            overlay_b64 = image_to_base64(overlay_img)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
 
