@@ -13,6 +13,9 @@ build/
 # Environment
 .env
 
+# API keys (hashed, but still sensitive)
+configs/api_keys.json
+
 # Data and model weights
 data/
 models/*.pth

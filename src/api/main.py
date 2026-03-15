@@ -3,10 +3,13 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.middleware.auth import APIKeyValidator, set_validator
+from src.api.middleware.rate_limit import RateLimitConfig, RateLimitMiddleware
 from src.api.routes import health, models, monitoring, predict
 from src.api.schemas.response import MEDICAL_DISCLAIMER
 from src.models.inference import InferencePipeline
@@ -15,6 +18,8 @@ from src.monitoring.prediction_logger import PredictionLogger
 from src.utils.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+API_KEYS_PATH = Path("configs/api_keys.json")
 
 
 @asynccontextmanager
@@ -27,6 +32,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     pipeline = InferencePipeline(registry=registry, config=settings.model)
 
     pred_logger = PredictionLogger(db_url=settings.database.url)
+
+    # Configure API key auth — reload keys from disk at startup
+    set_validator(
+        APIKeyValidator(
+            keys_path=API_KEYS_PATH,
+            enabled=API_KEYS_PATH.exists(),
+        )
+    )
 
     app.state.settings = settings
     app.state.registry = registry
@@ -45,6 +58,11 @@ def create_app() -> FastAPI:
         description="Production medical image segmentation API",
         version="1.0.0",
         lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        RateLimitMiddleware,
+        config=RateLimitConfig(per_minute=10, per_hour=100),
     )
 
     app.add_middleware(

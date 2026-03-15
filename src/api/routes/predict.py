@@ -4,8 +4,9 @@ import hashlib
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 
+from src.api.middleware.auth import verify_api_key
 from src.api.schemas.response import BatchResult, SegmentationResult
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ async def predict_single(
     file: UploadFile,
     model_name: str = Query(default="hybrid", description="Model variant to use"),
     return_overlay: bool = Query(default=False, description="Return overlay image"),
+    _client: str = Depends(verify_api_key),
 ) -> SegmentationResult:
     """Run segmentation on a single chest X-ray image."""
     _validate_image_file(file)
@@ -92,6 +94,7 @@ async def predict_batch(
     files: list[UploadFile],
     model_name: str = Query(default="hybrid", description="Model variant to use"),
     return_overlay: bool = Query(default=False, description="Return overlay image"),
+    _client: str = Depends(verify_api_key),
 ) -> BatchResult:
     """Run segmentation on a batch of chest X-ray images (max 10)."""
     if len(files) > MAX_BATCH_SIZE:

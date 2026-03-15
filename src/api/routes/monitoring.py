@@ -2,7 +2,9 @@
 
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
+
+from src.api.middleware.auth import verify_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,7 @@ router = APIRouter()
 async def get_metrics(
     request: Request,
     hours: int = Query(default=24, description="Look-back window in hours"),
+    _client: str = Depends(verify_api_key),
 ) -> dict:
     """Return aggregated prediction metrics."""
     pred_logger = getattr(request.app.state, "prediction_logger", None)
@@ -25,6 +28,7 @@ async def get_metrics(
 async def get_recent_predictions(
     request: Request,
     hours: int = Query(default=24, description="Look-back window in hours"),
+    _client: str = Depends(verify_api_key),
 ) -> list[dict]:
     """Return recent prediction records."""
     pred_logger = getattr(request.app.state, "prediction_logger", None)

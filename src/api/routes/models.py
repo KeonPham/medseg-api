@@ -3,8 +3,9 @@
 import logging
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from src.api.middleware.auth import verify_api_key
 from src.api.schemas.response import ModelListResponse
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,9 @@ router = APIRouter()
 
 
 @router.get("/models", response_model=ModelListResponse)
-async def list_models(request: Request) -> ModelListResponse:
+async def list_models(
+    request: Request, _client: str = Depends(verify_api_key)
+) -> ModelListResponse:
     """List all available segmentation models with metadata."""
     registry = request.app.state.registry
     models = registry.list_models()
@@ -31,7 +34,9 @@ async def list_models(request: Request) -> ModelListResponse:
 
 
 @router.get("/models/{model_name}")
-async def get_model_info(request: Request, model_name: str) -> dict:
+async def get_model_info(
+    request: Request, model_name: str, _client: str = Depends(verify_api_key)
+) -> dict:
     """Get detailed information about a specific model."""
     registry = request.app.state.registry
     info = registry.get_model_info(model_name)

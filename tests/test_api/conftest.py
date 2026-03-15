@@ -1,9 +1,11 @@
 """Shared fixtures for API tests."""
 
 import io
+import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -13,7 +15,11 @@ from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 from src.api.main import create_app
+from src.api.middleware.auth import APIKeyValidator, _hash_key, set_validator
 from src.api.schemas.response import BatchResult, SegmentationResult
+from src.monitoring.prediction_logger import PredictionLogger
+
+TEST_API_KEY = "test-key-for-unit-tests"
 
 
 @dataclass
@@ -61,6 +67,23 @@ def _make_segmentation_result(model_name: str = "hybrid") -> SegmentationResult:
 
 
 @pytest.fixture()
+def test_keys_file(tmp_path) -> Path:
+    """Create a temporary API keys JSON file with the test key."""
+    keys_path = tmp_path / "api_keys.json"
+    data = {
+        "keys": {
+            _hash_key(TEST_API_KEY): {
+                "name": "test-client",
+                "created_at": "2026-01-01T00:00:00Z",
+                "active": True,
+            }
+        }
+    }
+    keys_path.write_text(json.dumps(data))
+    return keys_path
+
+
+@pytest.fixture()
 def white_png_bytes() -> bytes:
     """Generate a 64x64 white PNG image as bytes."""
     img = Image.fromarray(np.full((64, 64, 3), 255, dtype=np.uint8))
@@ -88,15 +111,75 @@ def mock_pipeline() -> AsyncMock:
     return pipeline
 
 
-@pytest_asyncio.fixture()
-async def client(
-    fake_registry: FakeRegistry, mock_pipeline: AsyncMock
-) -> AsyncGenerator[AsyncClient, None]:
-    """Create a test client with mocked app state."""
+def _create_test_app(
+    fake_registry: FakeRegistry,
+    mock_pipeline: AsyncMock,
+    test_keys_file: Path,
+    prediction_logger: PredictionLogger | None = None,
+) -> object:
+    """Build a FastAPI app configured for testing with auth enabled."""
     app = create_app()
     app.state.settings = None
     app.state.registry = fake_registry
     app.state.pipeline = mock_pipeline
+
+    # Configure auth to use the test keys file
+    set_validator(APIKeyValidator(keys_path=test_keys_file, enabled=True))
+
+    if prediction_logger is not None:
+        app.state.prediction_logger = prediction_logger
+
+    return app
+
+
+@pytest_asyncio.fixture()
+async def client(
+    fake_registry: FakeRegistry, mock_pipeline: AsyncMock, test_keys_file: Path
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create a test client with auth enabled. Sends test API key by default."""
+    app = _create_test_app(fake_registry, mock_pipeline, test_keys_file)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": TEST_API_KEY},
+    ) as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture()
+async def client_no_key(
+    fake_registry: FakeRegistry, mock_pipeline: AsyncMock, test_keys_file: Path
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create a test client that does NOT send an API key."""
+    app = _create_test_app(fake_registry, mock_pipeline, test_keys_file)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest.fixture()
+def tmp_logger(tmp_path) -> PredictionLogger:
+    """Create a PredictionLogger backed by a temp database."""
+    db_path = str(tmp_path / "test_predictions.db")
+    return PredictionLogger(db_url=f"sqlite:///{db_path}")
+
+
+@pytest_asyncio.fixture()
+async def client_with_logger(
+    fake_registry: FakeRegistry,
+    mock_pipeline: AsyncMock,
+    test_keys_file: Path,
+    tmp_logger: PredictionLogger,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create a test client with prediction logger and auth."""
+    app = _create_test_app(
+        fake_registry, mock_pipeline, test_keys_file, prediction_logger=tmp_logger
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": TEST_API_KEY},
+    ) as ac:
         yield ac
