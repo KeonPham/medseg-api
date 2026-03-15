@@ -1,0 +1,21 @@
+name: Retrain
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model to retrain"
+        default: "hybrid"
+        type: choice
+        options:
+          - cnn
+          - vit
+          - hybrid
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v1
+      - run: uv sync
+      - run: python scripts/retrain.py --model ${{ inputs.model }}
