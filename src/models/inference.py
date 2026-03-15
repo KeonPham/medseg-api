@@ -11,6 +11,13 @@ import torch
 from src.api.schemas.response import BatchResult, SegmentationResult
 from src.models.registry import ModelRegistry
 from src.utils.config import ModelConfig
+from src.models.explainability import (
+    MODEL_EXPLANATIONS,
+    compute_gradcam,
+    compute_region_analysis,
+    generate_findings_summary,
+    probability_to_heatmap,
+)
 from src.utils.image import (
     image_to_base64,
     load_image,
@@ -81,6 +88,7 @@ class InferencePipeline:
         image_bytes: bytes,
         model_name: str = "hybrid",
         return_overlay: bool = False,
+        return_explainability: bool = False,
     ) -> SegmentationResult:
         """Run segmentation on a single image.
 
@@ -131,6 +139,29 @@ class InferencePipeline:
             overlay_img = overlay_mask(image, mask)
             overlay_b64 = image_to_base64(overlay_img)
 
+        # Optional explainability
+        explainability_data = None
+        if return_explainability:
+            heatmap_img = probability_to_heatmap(probabilities)
+            heatmap_b64 = image_to_base64(heatmap_img)
+
+            gradcam_img = compute_gradcam(
+                model, tensor, model_name, (original_h, original_w)
+            )
+            gradcam_b64 = image_to_base64(gradcam_img) if gradcam_img is not None else None
+
+            region_analysis = compute_region_analysis(mask, probabilities)
+            findings = generate_findings_summary(metrics, region_analysis, model_name)
+            model_explanation = MODEL_EXPLANATIONS.get(model_name)
+
+            explainability_data = {
+                "heatmap_base64": heatmap_b64,
+                "gradcam_base64": gradcam_b64,
+                "region_analysis": region_analysis,
+                "findings": findings,
+                "model_explanation": model_explanation,
+            }
+
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         # Resolve version
@@ -143,6 +174,7 @@ class InferencePipeline:
             inference_time_ms=round(elapsed_ms, 2),
             mask_base64=mask_b64,
             overlay_base64=overlay_b64,
+            explainability=explainability_data,
             metrics=metrics,
             image_size={"width": original_w, "height": original_h},
             timestamp=datetime.now(),

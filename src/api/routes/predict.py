@@ -53,6 +53,9 @@ async def predict_single(
     file: UploadFile,
     model_name: str = Query(default="hybrid", description="Model variant to use"),
     return_overlay: bool = Query(default=False, description="Return overlay image"),
+    return_explainability: bool = Query(
+        default=False, description="Return explainability data (heatmap, GradCAM, findings)"
+    ),
     _client: str = Depends(verify_api_key),
 ) -> SegmentationResult:
     """Run segmentation on a single chest X-ray image."""
@@ -68,7 +71,10 @@ async def predict_single(
     image_bytes = await file.read()
     pipeline = request.app.state.pipeline
     result = await pipeline.predict_single(
-        image_bytes, model_name=model_name, return_overlay=return_overlay
+        image_bytes,
+        model_name=model_name,
+        return_overlay=return_overlay,
+        return_explainability=return_explainability,
     )
 
     # Log prediction

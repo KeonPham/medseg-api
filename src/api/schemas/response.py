@@ -18,6 +18,13 @@ class SegmentationResult(BaseModel):
     inference_time_ms: float = Field(description="Inference latency in milliseconds")
     mask_base64: str = Field(description="Base64-encoded segmentation mask PNG")
     overlay_base64: str | None = Field(default=None, description="Base64 overlay image")
+    explainability: dict | None = Field(
+        default=None,
+        description=(
+            "Explainability data: heatmap_base64, gradcam_base64, "
+            "region_analysis, findings, model_explanation"
+        ),
+    )
     metrics: dict = Field(
         default_factory=dict,
         description="Computed metrics: lung_coverage_pct, confidence_score, symmetry_ratio",
