@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import datetime
 
+import cv2
 import numpy as np
 import torch
 
@@ -110,6 +111,12 @@ class InferencePipeline:
 
         # Postprocess to original size
         mask = postprocess(logits, (original_h, original_w))
+
+        # Resize probabilities to match the postprocessed mask dimensions
+        if probabilities.shape != mask.shape:
+            probabilities = cv2.resize(
+                probabilities, (original_w, original_h), interpolation=cv2.INTER_LINEAR
+            )
 
         # Compute metrics
         metrics = _compute_metrics(probabilities, mask)
