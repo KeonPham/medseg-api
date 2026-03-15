@@ -1,5 +1,6 @@
 data/
 mlruns/
+results/
 .git
 __pycache__
 *.pth
@@ -10,3 +11,12 @@ monitoring/
 .pytest_cache/
 .ruff_cache/
 *.pyc
+*.db
+*.db-shm
+*.db-wal
+Caddyfile
+docker-compose*.yml
+scripts/deploy.sh
+CHANGELOG.md
+AGENT.md
+*.Zone.Identifier

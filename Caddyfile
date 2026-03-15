@@ -1,0 +1,33 @@
+# Replace YOUR_DOMAIN with your actual domain (e.g. medseg.khoa.dev)
+# Caddy automatically provisions Let's Encrypt SSL certificates.
+#
+# If you don't have a domain yet, use :80 instead of the domain name
+# to serve over plain HTTP on port 80.
+
+{$DOMAIN:localhost} {
+    reverse_proxy api:8000
+
+    # Security headers
+    header {
+        X-Content-Type-Options    nosniff
+        X-Frame-Options           DENY
+        Referrer-Policy           strict-origin-when-cross-origin
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    # Gzip compression
+    encode gzip
+
+    # Request size limit (20MB for medical images)
+    request_body {
+        max_size 20MB
+    }
+
+    # Access log
+    log {
+        output file /data/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
