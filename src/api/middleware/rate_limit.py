@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # Paths exempt from rate limiting
 PUBLIC_PATHS = frozenset(
     {
+        "/",
         "/api/v1/health",
         "/api/v1/ready",
         "/docs",

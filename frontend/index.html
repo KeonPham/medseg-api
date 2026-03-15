@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedSegAPI — Lung Segmentation</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d26;
+            --surface-hover: #22252f;
+            --border: #2a2d38;
+            --primary: #00b4d8;
+            --primary-dim: #0090ad;
+            --accent: #48cae4;
+            --success: #06d6a0;
+            --warning: #ffd166;
+            --error: #ef476f;
+            --text: #e8e8e8;
+            --text-dim: #a0a0b0;
+            --text-muted: #6b6b7b;
+            --radius: 10px;
+            --shadow: 0 2px 12px rgba(0,0,0,0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── Header ─── */
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: 700; color: #fff;
+        }
+
+        .logo h1 {
+            font-size: 18px; font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .logo span { font-size: 11px; color: var(--text-dim); display: block; margin-top: -2px; }
+
+        .header-controls {
+            display: flex; align-items: center; gap: 12px;
+            margin-left: auto; flex-wrap: wrap;
+        }
+
+        .api-key-group {
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .api-key-group label { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+
+        .api-key-input {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+            color: var(--text); padding: 7px 12px; font-size: 13px; width: 280px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            transition: border-color 0.2s;
+        }
+
+        .api-key-input:focus { outline: none; border-color: var(--primary); }
+        .api-key-input::placeholder { color: var(--text-muted); }
+
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--text-muted);
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+
+        .status-dot.healthy { background: var(--success); box-shadow: 0 0 8px rgba(6,214,160,0.5); }
+        .status-dot.unhealthy { background: var(--error); box-shadow: 0 0 8px rgba(239,71,111,0.5); }
+
+        .status-label { font-size: 11px; color: var(--text-dim); }
+
+        /* ─── Main ─── */
+        main {
+            flex: 1; padding: 28px;
+            max-width: 1280px; width: 100%; margin: 0 auto;
+        }
+
+        /* ─── Upload Section ─── */
+        .upload-section {
+            display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;
+        }
+
+        .drop-zone {
+            flex: 1; min-width: 300px;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(0,180,216,0.05);
+        }
+
+        .drop-zone-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+
+        .drop-zone h3 { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+
+        .drop-zone p { font-size: 12px; color: var(--text-dim); }
+
+        .drop-zone input[type="file"] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer;
+        }
+
+        .drop-zone.has-file { border-color: var(--success); border-style: solid; padding: 16px; }
+        .drop-zone.has-file .drop-placeholder { display: none; }
+        .drop-zone.has-file .file-preview { display: flex; }
+
+        .file-preview {
+            display: none; align-items: center; gap: 16px; text-align: left;
+        }
+
+        .file-preview img {
+            width: 100px; height: 100px; object-fit: contain;
+            border-radius: 6px; background: #000;
+        }
+
+        .file-preview .file-info h4 { font-size: 14px; font-weight: 500; }
+        .file-preview .file-info p { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+        .controls-panel {
+            width: 240px; display: flex; flex-direction: column; gap: 12px; flex-shrink: 0;
+        }
+
+        .control-group label {
+            display: block; font-size: 12px; color: var(--text-dim);
+            margin-bottom: 4px; font-weight: 500;
+        }
+
+        .control-group select, .control-group input {
+            width: 100%; padding: 9px 12px; font-size: 13px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 6px; color: var(--text);
+            transition: border-color 0.2s;
+        }
+
+        .control-group select:focus, .control-group input:focus {
+            outline: none; border-color: var(--primary);
+        }
+
+        .btn-predict {
+            width: 100%; padding: 12px; font-size: 14px; font-weight: 600;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+            color: #fff; border: none; border-radius: 8px;
+            cursor: pointer; transition: all 0.25s;
+            letter-spacing: 0.3px;
+        }
+
+        .btn-predict:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(0,180,216,0.4);
+        }
+
+        .btn-predict:disabled {
+            opacity: 0.5; cursor: not-allowed; transform: none;
+        }
+
+        .btn-predict.loading { position: relative; color: transparent; }
+
+        .btn-predict.loading::after {
+            content: ""; position: absolute;
+            width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            top: 50%; left: 50%;
+            margin: -10px 0 0 -10px;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ─── Results ─── */
+        .results-section {
+            margin-top: 28px;
+            animation: fadeUp 0.4s ease;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .results-section.hidden { display: none; }
+
+        .section-title {
+            font-size: 15px; font-weight: 600; color: var(--text-dim);
+            margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+        }
+
+        .section-title::before {
+            content: ""; width: 3px; height: 16px;
+            background: var(--primary); border-radius: 2px;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .image-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); overflow: hidden;
+        }
+
+        .image-card-header {
+            padding: 10px 14px; font-size: 12px; font-weight: 600;
+            color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .image-card-header .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+
+        .image-card-header .dot.blue { background: var(--primary); }
+        .image-card-header .dot.white { background: #fff; }
+        .image-card-header .dot.green { background: var(--success); }
+
+        .image-card-body {
+            padding: 8px; display: flex; align-items: center; justify-content: center;
+            min-height: 300px; background: #000;
+        }
+
+        .image-card-body img {
+            max-width: 100%; max-height: 400px; object-fit: contain;
+        }
+
+        /* ─── Metrics ─── */
+        .metrics-section {
+            margin-top: 16px;
+            animation: fadeUp 0.4s ease 0.15s both;
+        }
+
+        .metrics-section.hidden { display: none; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+        }
+
+        .metric-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 26px; font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .metric-value.success-color {
+            background: linear-gradient(135deg, var(--success), #34edb5);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .metric-value.warning-color {
+            background: linear-gradient(135deg, var(--warning), #ffe08a);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .metric-label {
+            font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 0.6px; margin-top: 4px;
+        }
+
+        .metric-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+        /* ─── Symmetry Badge ─── */
+        .symmetry-badge {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 600; margin-top: 6px;
+        }
+
+        .symmetry-badge.good { background: rgba(6,214,160,0.15); color: var(--success); }
+        .symmetry-badge.moderate { background: rgba(255,209,102,0.15); color: var(--warning); }
+        .symmetry-badge.poor { background: rgba(239,71,111,0.15); color: var(--error); }
+
+        /* ─── Download Bar ─── */
+        .download-bar {
+            margin-top: 12px;
+            display: flex; gap: 8px; flex-wrap: wrap;
+        }
+
+        .btn-download {
+            padding: 8px 16px; font-size: 12px; font-weight: 500;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 6px; color: var(--text-dim); cursor: pointer;
+            transition: all 0.2s; text-decoration: none;
+        }
+
+        .btn-download:hover {
+            border-color: var(--primary); color: var(--primary);
+        }
+
+        /* ─── Footer ─── */
+        footer {
+            padding: 14px 28px; text-align: center;
+            font-size: 11px; color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        /* ─── Toast Notifications ─── */
+        #toast-container {
+            position: fixed; top: 16px; right: 16px;
+            z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+        }
+
+        .toast {
+            padding: 12px 18px; border-radius: 8px;
+            font-size: 13px; max-width: 360px;
+            box-shadow: var(--shadow);
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.error { background: rgba(239,71,111,0.15); border: 1px solid var(--error); color: var(--error); }
+        .toast.success { background: rgba(6,214,160,0.15); border: 1px solid var(--success); color: var(--success); }
+        .toast.warning { background: rgba(255,209,102,0.15); border: 1px solid var(--warning); color: var(--warning); }
+        .toast.info { background: rgba(0,180,216,0.15); border: 1px solid var(--primary); color: var(--primary); }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(40px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ─── History ─── */
+        .history-section { margin-top: 28px; }
+        .history-section.hidden { display: none; }
+
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .history-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); overflow: hidden;
+            cursor: pointer; transition: border-color 0.2s;
+        }
+
+        .history-card:hover { border-color: var(--primary); }
+
+        .history-card img {
+            width: 100%; height: 140px; object-fit: cover;
+            background: #000;
+        }
+
+        .history-card-info {
+            padding: 8px 10px; font-size: 11px; color: var(--text-dim);
+        }
+
+        .history-card-info strong { color: var(--text); font-size: 12px; display: block; margin-bottom: 2px; }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 768px) {
+            header { padding: 12px 16px; }
+            .api-key-input { width: 200px; }
+            main { padding: 16px; }
+            .upload-section { flex-direction: column; }
+            .controls-panel { width: 100%; flex-direction: row; flex-wrap: wrap; }
+            .control-group { flex: 1; min-width: 120px; }
+            .btn-predict { flex: 1; min-width: 120px; }
+            .image-grid { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">
+        <div class="logo-icon">M</div>
+        <div>
+            <h1>MedSegAPI</h1>
+            <span>Lung Segmentation Platform</span>
+        </div>
+    </div>
+    <div class="header-controls">
+        <div class="api-key-group">
+            <label>API Key</label>
+            <input type="password" id="apiKeyInput" class="api-key-input"
+                   placeholder="Enter your API key..." autocomplete="off">
+        </div>
+        <div class="api-key-group">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusLabel" class="status-label">Checking...</span>
+        </div>
+    </div>
+</header>
+
+<main>
+    <!-- Upload -->
+    <section class="upload-section">
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-placeholder">
+                <div class="drop-zone-icon">&#x1F3E5;</div>
+                <h3>Drop chest X-ray here</h3>
+                <p>PNG, JPEG, or DICOM &middot; Click to browse</p>
+            </div>
+            <div class="file-preview" id="filePreview">
+                <img id="previewImg" src="" alt="Preview">
+                <div class="file-info">
+                    <h4 id="fileName">—</h4>
+                    <p id="fileSize">—</p>
+                    <p style="color:var(--primary);margin-top:4px;cursor:pointer" onclick="clearFile()">Change file</p>
+                </div>
+            </div>
+            <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.dcm,.dicom">
+        </div>
+
+        <div class="controls-panel">
+            <div class="control-group">
+                <label>Model</label>
+                <select id="modelSelect">
+                    <option value="hybrid" selected>Hybrid (CNN+ViT)</option>
+                    <option value="cnn_only">CNN-only (ResNet+UNet)</option>
+                    <option value="vit_only">ViT-only (DeiT+Decoder)</option>
+                </select>
+            </div>
+            <button class="btn-predict" id="btnPredict" disabled onclick="runPrediction()">
+                Run Segmentation
+            </button>
+        </div>
+    </section>
+
+    <!-- Results -->
+    <section class="results-section hidden" id="resultsSection">
+        <div class="section-title">Segmentation Results</div>
+        <div class="image-grid">
+            <div class="image-card">
+                <div class="image-card-header"><span class="dot blue"></span> Original</div>
+                <div class="image-card-body"><img id="resultOriginal" src="" alt="Original"></div>
+            </div>
+            <div class="image-card">
+                <div class="image-card-header"><span class="dot white"></span> Mask</div>
+                <div class="image-card-body"><img id="resultMask" src="" alt="Mask"></div>
+            </div>
+            <div class="image-card">
+                <div class="image-card-header"><span class="dot green"></span> Overlay</div>
+                <div class="image-card-body"><img id="resultOverlay" src="" alt="Overlay"></div>
+            </div>
+        </div>
+        <div class="download-bar">
+            <a class="btn-download" id="dlMask" download>Download Mask</a>
+            <a class="btn-download" id="dlOverlay" download>Download Overlay</a>
+        </div>
+    </section>
+
+    <!-- Metrics -->
+    <section class="metrics-section hidden" id="metricsSection">
+        <div class="section-title">Prediction Metrics</div>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" id="mModel">—</div>
+                <div class="metric-label">Model</div>
+                <div class="metric-sub" id="mVersion">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="mTime">—</div>
+                <div class="metric-label">Inference Time</div>
+                <div class="metric-sub">milliseconds</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value success-color" id="mConfidence">—</div>
+                <div class="metric-label">Confidence</div>
+                <div class="metric-sub">mean probability</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="mCoverage">—</div>
+                <div class="metric-label">Lung Coverage</div>
+                <div class="metric-sub">% of image</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="mSymmetry">—</div>
+                <div class="metric-label">Symmetry</div>
+                <div id="mSymBadge"></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="mSize">—</div>
+                <div class="metric-label">Image Size</div>
+                <div class="metric-sub">pixels</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- History -->
+    <section class="history-section hidden" id="historySection">
+        <div class="section-title">Prediction History</div>
+        <div class="history-grid" id="historyGrid"></div>
+    </section>
+</main>
+
+<footer>
+    Research and educational use only. Not intended for clinical diagnosis or medical decision-making.
+    &nbsp;&middot;&nbsp; MedSegAPI v1.0.0
+</footer>
+
+<div id="toast-container"></div>
+
+<script>
+    // ─── Config ───
+    const API_BASE = window.location.protocol === 'file:'
+        ? 'http://localhost:8000' : window.location.origin;
+
+    // ─── State ───
+    const state = {
+        apiKey: localStorage.getItem('medseg_api_key') || '',
+        selectedFile: null,
+        previewUrl: null,
+        isLoading: false,
+        history: JSON.parse(localStorage.getItem('medseg_history') || '[]')
+    };
+
+    // ─── DOM refs ───
+    const $ = id => document.getElementById(id);
+    const apiKeyInput = $('apiKeyInput');
+    const statusDot = $('statusDot');
+    const statusLabel = $('statusLabel');
+    const dropZone = $('dropZone');
+    const fileInput = $('fileInput');
+    const btnPredict = $('btnPredict');
+    const resultsSection = $('resultsSection');
+    const metricsSection = $('metricsSection');
+    const historySection = $('historySection');
+
+    // ─── Init ───
+    apiKeyInput.value = state.apiKey;
+    checkHealth();
+    setInterval(checkHealth, 30000);
+    renderHistory();
+
+    // ─── API Key ───
+    apiKeyInput.addEventListener('input', () => {
+        state.apiKey = apiKeyInput.value.trim();
+        localStorage.setItem('medseg_api_key', state.apiKey);
+    });
+
+    // ─── Health Check ───
+    async function checkHealth() {
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/health`, { signal: AbortSignal.timeout(5000) });
+            if (res.ok) {
+                statusDot.className = 'status-dot healthy';
+                statusLabel.textContent = 'API Online';
+            } else {
+                statusDot.className = 'status-dot unhealthy';
+                statusLabel.textContent = 'Error';
+            }
+        } catch {
+            statusDot.className = 'status-dot unhealthy';
+            statusLabel.textContent = 'Offline';
+        }
+    }
+
+    // ─── File Handling ───
+    const ALLOWED = new Set(['.png', '.jpg', '.jpeg', '.dcm', '.dicom']);
+
+    function handleFile(file) {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!ALLOWED.has(ext)) {
+            toast('Unsupported format. Use PNG, JPEG, or DICOM.', 'error');
+            return;
+        }
+        state.selectedFile = file;
+        dropZone.classList.add('has-file');
+        $('fileName').textContent = file.name;
+        $('fileSize').textContent = formatSize(file.size);
+
+        if (ext === '.dcm' || ext === '.dicom') {
+            $('previewImg').src = '';
+            $('previewImg').alt = 'DICOM preview not available';
+        } else {
+            state.previewUrl = URL.createObjectURL(file);
+            $('previewImg').src = state.previewUrl;
+        }
+        btnPredict.disabled = false;
+    }
+
+    function clearFile() {
+        state.selectedFile = null;
+        if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+        state.previewUrl = null;
+        dropZone.classList.remove('has-file');
+        fileInput.value = '';
+        btnPredict.disabled = true;
+    }
+
+    fileInput.addEventListener('change', e => {
+        if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault(); dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    // ─── Prediction ───
+    async function runPrediction() {
+        if (!state.selectedFile) { toast('Please select an image first.', 'warning'); return; }
+        if (!state.apiKey) { toast('Please enter your API key.', 'warning'); return; }
+
+        const model = $('modelSelect').value;
+        btnPredict.disabled = true;
+        btnPredict.classList.add('loading');
+        state.isLoading = true;
+
+        const formData = new FormData();
+        formData.append('file', state.selectedFile);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/api/v1/predict?model_name=${model}&return_overlay=true`,
+                {
+                    method: 'POST',
+                    headers: { 'X-API-Key': state.apiKey },
+                    body: formData,
+                }
+            );
+
+            if (res.status === 401) { toast('Invalid API key. Check your key and try again.', 'error'); return; }
+            if (res.status === 422) { toast('Invalid request. Check the image format.', 'error'); return; }
+            if (res.status === 429) {
+                const retry = res.headers.get('Retry-After') || '60';
+                toast(`Rate limit exceeded. Retry in ${retry}s.`, 'warning');
+                return;
+            }
+            if (!res.ok) { toast(`Server error: ${res.status}`, 'error'); return; }
+
+            const data = await res.json();
+            displayResults(data);
+            addToHistory(data);
+            toast('Segmentation complete!', 'success');
+
+        } catch (err) {
+            toast(`Network error: ${err.message}`, 'error');
+        } finally {
+            btnPredict.disabled = false;
+            btnPredict.classList.remove('loading');
+            state.isLoading = false;
+        }
+    }
+
+    // ─── Display Results ───
+    function displayResults(data) {
+        // Images
+        $('resultOriginal').src = state.previewUrl || '';
+        $('resultMask').src = `data:image/png;base64,${data.mask_base64}`;
+
+        if (data.overlay_base64) {
+            $('resultOverlay').src = `data:image/png;base64,${data.overlay_base64}`;
+        }
+
+        // Downloads
+        $('dlMask').href = `data:image/png;base64,${data.mask_base64}`;
+        $('dlMask').download = `${state.selectedFile.name.replace(/\.[^.]+$/, '')}_mask.png`;
+
+        if (data.overlay_base64) {
+            $('dlOverlay').href = `data:image/png;base64,${data.overlay_base64}`;
+            $('dlOverlay').download = `${state.selectedFile.name.replace(/\.[^.]+$/, '')}_overlay.png`;
+            $('dlOverlay').style.display = '';
+        }
+
+        // Metrics
+        $('mModel').textContent = data.model_name;
+        $('mVersion').textContent = `v${data.model_version}`;
+        $('mTime').textContent = data.inference_time_ms.toFixed(1);
+
+        const m = data.metrics;
+        $('mConfidence').textContent = `${(m.confidence_score * 100).toFixed(1)}%`;
+        $('mCoverage').textContent = `${m.lung_coverage_pct.toFixed(1)}%`;
+        $('mSymmetry').textContent = m.symmetry_ratio.toFixed(3);
+
+        // Symmetry badge
+        let badgeClass, badgeText;
+        if (m.symmetry_ratio > 0.85) { badgeClass = 'good'; badgeText = 'Symmetric'; }
+        else if (m.symmetry_ratio > 0.6) { badgeClass = 'moderate'; badgeText = 'Moderate asymmetry'; }
+        else { badgeClass = 'poor'; badgeText = 'Significant asymmetry'; }
+        $('mSymBadge').innerHTML = `<span class="symmetry-badge ${badgeClass}">${badgeText}</span>`;
+
+        $('mSize').textContent = `${data.image_size.width}x${data.image_size.height}`;
+
+        // Show sections
+        resultsSection.classList.remove('hidden');
+        metricsSection.classList.remove('hidden');
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ─── History ───
+    function addToHistory(data) {
+        const entry = {
+            name: state.selectedFile.name,
+            model: data.model_name,
+            confidence: data.metrics.confidence_score,
+            time_ms: data.inference_time_ms,
+            overlay: data.overlay_base64 ? data.overlay_base64.substring(0, 200) + '...' : null,
+            overlayFull: data.overlay_base64,
+            ts: new Date().toISOString()
+        };
+        state.history.unshift(entry);
+        if (state.history.length > 12) state.history.pop();
+        // Don't store full base64 in localStorage (too large)
+        const toStore = state.history.map(h => ({ ...h, overlayFull: undefined }));
+        localStorage.setItem('medseg_history', JSON.stringify(toStore));
+        renderHistory();
+    }
+
+    function renderHistory() {
+        if (state.history.length === 0) { historySection.classList.add('hidden'); return; }
+        historySection.classList.remove('hidden');
+        const grid = $('historyGrid');
+        grid.innerHTML = state.history.map(h => `
+            <div class="history-card">
+                <div class="history-card-info">
+                    <strong>${h.name}</strong>
+                    ${h.model} &middot; ${(h.confidence * 100).toFixed(0)}% conf &middot; ${h.time_ms.toFixed(0)}ms
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // ─── Utilities ───
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function toast(msg, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4000);
+    }
+</script>
+
+</body>
+</html>

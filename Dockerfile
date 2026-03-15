@@ -36,6 +36,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Copy application code and configs
 COPY src/ src/
 COPY configs/ configs/
+COPY frontend/ frontend/
 
 # Create non-root user
 RUN groupadd --system appuser && useradd --system --gid appuser appuser \

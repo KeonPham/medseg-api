@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from src.api.middleware.auth import APIKeyValidator, set_validator
 from src.api.middleware.rate_limit import RateLimitConfig, RateLimitMiddleware
@@ -84,6 +85,11 @@ def create_app() -> FastAPI:
     app.include_router(predict.router, prefix="/api/v1", tags=["predict"])
     app.include_router(models.router, prefix="/api/v1", tags=["models"])
     app.include_router(monitoring.router, prefix="/api/v1", tags=["monitoring"])
+
+    @app.get("/", include_in_schema=False)
+    async def serve_frontend() -> FileResponse:
+        """Serve the single-page frontend."""
+        return FileResponse("frontend/index.html", media_type="text/html")
 
     return app
 
