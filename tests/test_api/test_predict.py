@@ -67,9 +67,7 @@ async def test_predict_single_invalid_format(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_predict_single_with_overlay(
-    client: AsyncClient, mock_pipeline: AsyncMock
-) -> None:
+async def test_predict_single_with_overlay(client: AsyncClient, mock_pipeline: AsyncMock) -> None:
     png = _make_png()
     resp = await client.post(
         "/api/v1/predict?return_overlay=true",

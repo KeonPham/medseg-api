@@ -63,8 +63,7 @@ MODELS = [
     {
         "name": "vit_only",
         "architecture": "vit",
-        "source": THESIS_DIR
-        / "lung_segmentation_bce_dice_inference_ready_20250919_161314.pth",
+        "source": THESIS_DIR / "lung_segmentation_bce_dice_inference_ready_20250919_161314.pth",
         "dest": MODELS_DIR / "vit_only" / "lung_seg_vit_v1.pth",
     },
     {

@@ -1,6 +1,8 @@
 """Prediction routes for single and batch image segmentation."""
 
+import hashlib
 import logging
+import uuid
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile
 
@@ -39,8 +41,7 @@ def _validate_image_file(file: UploadFile) -> None:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Unsupported file format: .{ext}. "
-                f"Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+                f"Unsupported file format: .{ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
             ),
         )
 
@@ -64,9 +65,25 @@ async def predict_single(
 
     image_bytes = await file.read()
     pipeline = request.app.state.pipeline
-    return await pipeline.predict_single(
+    result = await pipeline.predict_single(
         image_bytes, model_name=model_name, return_overlay=return_overlay
     )
+
+    # Log prediction
+    pred_logger = getattr(request.app.state, "prediction_logger", None)
+    if pred_logger is not None:
+        pred_logger.log_prediction(
+            request_id=str(uuid.uuid4()),
+            model_name=result.model_name,
+            model_version=result.model_version,
+            inference_time_ms=result.inference_time_ms,
+            image_hash=hashlib.sha256(image_bytes).hexdigest(),
+            confidence_score=result.metrics.get("confidence_score", 0.0),
+            lung_coverage_pct=result.metrics.get("lung_coverage_pct", 0.0),
+            symmetry_ratio=result.metrics.get("symmetry_ratio", 0.0),
+        )
+
+    return result
 
 
 @router.post("/batch", response_model=BatchResult)
@@ -95,6 +112,23 @@ async def predict_batch(
 
     images = [await f.read() for f in files]
     pipeline = request.app.state.pipeline
-    return await pipeline.predict_batch(
+    batch_result = await pipeline.predict_batch(
         images, model_name=model_name, return_overlay=return_overlay
     )
+
+    # Log each prediction in the batch
+    pred_logger = getattr(request.app.state, "prediction_logger", None)
+    if pred_logger is not None:
+        for i, result in enumerate(batch_result.results):
+            pred_logger.log_prediction(
+                request_id=str(uuid.uuid4()),
+                model_name=result.model_name,
+                model_version=result.model_version,
+                inference_time_ms=result.inference_time_ms,
+                image_hash=hashlib.sha256(images[i]).hexdigest(),
+                confidence_score=result.metrics.get("confidence_score", 0.0),
+                lung_coverage_pct=result.metrics.get("lung_coverage_pct", 0.0),
+                symmetry_ratio=result.metrics.get("symmetry_ratio", 0.0),
+            )
+
+    return batch_result

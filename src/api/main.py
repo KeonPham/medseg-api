@@ -11,6 +11,7 @@ from src.api.routes import health, models, monitoring, predict
 from src.api.schemas.response import MEDICAL_DISCLAIMER
 from src.models.inference import InferencePipeline
 from src.models.registry import ModelRegistry
+from src.monitoring.prediction_logger import PredictionLogger
 from src.utils.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -25,9 +26,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     registry = ModelRegistry()
     pipeline = InferencePipeline(registry=registry, config=settings.model)
 
+    pred_logger = PredictionLogger(db_url=settings.database.url)
+
     app.state.settings = settings
     app.state.registry = registry
     app.state.pipeline = pipeline
+    app.state.prediction_logger = pred_logger
 
     logger.info("MedSegAPI ready (default_model=%s)", registry.default_model)
     yield
