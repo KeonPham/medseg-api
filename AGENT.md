@@ -13,11 +13,13 @@ research model → API → Docker → CI/CD → monitoring → continuous traini
 - **ML:** PyTorch (use CPU-only for API serving; GPU via conda ml_env for training)
 - **Model Registry:** MLflow
 - **Data Versioning:** DVC
-- **Database:** PostgreSQL (production) + SQLite (dev fallback)
+- **Database:** SQLite (production + dev), PostgreSQL available in compose stack
 - **Testing:** pytest + pytest-asyncio + httpx (async API tests)
-- **Container:** Docker with multi-stage builds
+- **Container:** Docker with multi-stage builds (ARM64 + x86_64)
 - **CI/CD:** GitHub Actions
-- **Deployment:** Railway (staging)
+- **Deployment:** Oracle Cloud A1.Flex (ARM64 Ampere, production)
+- **Reverse Proxy:** Caddy with automatic HTTPS (Let's Encrypt)
+- **Domain:** lungmedseg.duckdns.org (DuckDNS free DNS)
 - **Monitoring:** Streamlit dashboard + Prometheus metrics
 
 ## Environment
@@ -91,44 +93,66 @@ Three model variants from the thesis:
 - GET  /api/v1/metrics — Prometheus-compatible metrics
 - GET  /api/v1/ab-results — A/B test comparison results
 
+## Server Access
+```bash
+# SSH to Oracle Cloud production server
+ssh -i ~/.ssh/ssh-key-2026-03-17.key ubuntu@140.245.113.52
+cd ~/medseg-api
+
+# Deploy updates
+git pull && sudo docker compose -f docker-compose.prod.yml up -d --build api
+
+# Manage API keys (always restart after)
+python3 scripts/create_api_key.py --name "guest" --max-uses 3
+sudo docker compose -f docker-compose.prod.yml restart api
+
+# View logs
+sudo docker compose -f docker-compose.prod.yml logs --tail 50 api
+```
+
 ## Project Structure
 ```
 medseg-api/
-├── AGENT.md
-├── CLAUDE.md
-├── README.md
-├── pyproject.toml
+├── AGENT.md                       # Project instructions & standards
+├── CLAUDE.md                      # Extended context for AI assistants
+├── README.md                      # Main documentation
+├── CHANGELOG.md                   # Version history
+├── pyproject.toml                 # Dependencies (uv)
 ├── uv.lock
-├── Dockerfile
-├── Dockerfile.train
-├── docker-compose.yml
+├── Dockerfile                     # Multi-stage build (ARM64 + x86_64)
+├── docker-compose.yml             # Dev stack
+├── docker-compose.prod.yml        # Prod stack (Caddy + API + PostgreSQL)
+├── Caddyfile                      # Reverse proxy (auto HTTPS)
 ├── .github/workflows/
 │   ├── ci.yml
 │   ├── cd.yml
 │   └── retrain.yml
 ├── .env.example
 ├── .gitignore
+├── .dockerignore
 ├── .ruff.toml
 ├── configs/
-│   ├── model_registry.yaml
-│   ├── training.yaml
-│   └── serving.yaml
+│   ├── model_registry.yaml        # Model versions & metrics
+│   ├── serving.yaml               # Server & model config
+│   └── api_keys.json              # SHA-256 hashed API keys (.gitignored)
+├── frontend/
+│   └── index.html                 # Interactive web viewer (canvas-based)
 ├── src/
 │   ├── __init__.py
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── main.py
+│   │   ├── main.py                # FastAPI app factory & lifespan
 │   │   ├── routes/
 │   │   │   ├── __init__.py
-│   │   │   ├── predict.py
-│   │   │   ├── models.py
-│   │   │   ├── health.py
-│   │   │   └── monitoring.py
+│   │   │   ├── predict.py         # POST /predict, /batch
+│   │   │   ├── models.py          # GET /models
+│   │   │   ├── health.py          # GET /health, /ready
+│   │   │   └── monitoring.py      # GET /metrics, /predictions
 │   │   ├── middleware/
 │   │   │   ├── __init__.py
-│   │   │   ├── auth.py
-│   │   │   ├── rate_limit.py
-│   │   │   └── logging_mw.py
+│   │   │   ├── auth.py            # API key auth (master + guest keys)
+│   │   │   ├── rate_limit.py      # Per-key rate limiting
+│   │   │   └── logging_mw.py      # Request logging
 │   │   └── schemas/
 │   │       ├── __init__.py
 │   │       ├── request.py
@@ -137,11 +161,12 @@ medseg-api/
 │   │   ├── __init__.py
 │   │   ├── architectures/
 │   │   │   ├── __init__.py
-│   │   │   ├── cnn_model.py
-│   │   │   ├── vit_model.py
-│   │   │   └── hybrid_model.py
-│   │   ├── registry.py
-│   │   └── inference.py
+│   │   │   ├── cnn_model.py       # ResNet-18 + U-Net
+│   │   │   ├── vit_model.py       # DeiT-Tiny + Decoder
+│   │   │   └── hybrid_model.py    # CNN-ViT + Cross-Attention
+│   │   ├── registry.py            # Model versioning & hot-swap
+│   │   ├── inference.py           # Preprocessing & prediction
+│   │   └── explainability.py      # Grad-CAM / SHAP
 │   ├── training/
 │   │   ├── __init__.py
 │   │   ├── trainer.py
@@ -149,9 +174,11 @@ medseg-api/
 │   │   ├── losses.py
 │   │   ├── metrics.py
 │   │   ├── augmentations.py
-│   │   └── callbacks.py
+│   │   ├── callbacks.py
+│   │   └── evaluation.py
 │   ├── monitoring/
 │   │   ├── __init__.py
+│   │   ├── prediction_logger.py   # SQLite prediction logging
 │   │   ├── logger.py
 │   │   ├── drift.py
 │   │   └── dashboard.py
@@ -160,28 +187,31 @@ medseg-api/
 │       ├── config.py
 │       ├── dicom.py
 │       └── image.py
-├── data/
-│   ├── raw/
-│   └── processed/
-├── models/
-│   ├── cnn_only/
-│   ├── vit_only/
-│   └── hybrid/
-├── tests/
-│   ├── __init__.py
+├── scripts/
+│   ├── create_api_key.py          # Generate/list/revoke API keys
+│   ├── setup_models.py            # Copy thesis weights + validate
+│   ├── train.py                   # Training entrypoint
+│   ├── retrain.py                 # Continuous retraining
+│   ├── evaluate.py                # Model evaluation
+│   ├── register_model.py          # Register in MLflow
+│   ├── export_onnx.py             # Export to ONNX
+│   ├── download_data.py           # Dataset download
+│   ├── preprocess_data.py         # Data preprocessing
+│   ├── add_new_data.py            # Add new training data
+│   ├── predict_and_save.py        # Batch prediction
+│   └── deploy.sh                  # Deployment automation
+├── monitoring/
+│   └── streamlit_app.py           # Monitoring dashboard
+├── tests/                         # 152 tests (pytest)
 │   ├── conftest.py
 │   ├── test_api/
 │   ├── test_models/
-│   └── test_training/
-├── scripts/
-│   ├── download_data.py
-│   ├── preprocess_data.py
-│   ├── train.py
-│   ├── evaluate.py
-│   ├── register_model.py
-│   └── export_onnx.py
-└── monitoring/
-    └── streamlit_app.py
+│   ├── test_monitoring/
+│   ├── test_training/
+│   └── test_utils/
+├── models/                        # Model weights (.gitignored)
+├── data/                          # Training data (.gitignored)
+└── results/                       # Evaluation outputs
 ```
 
 ## When Making Changes

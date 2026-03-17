@@ -5,6 +5,41 @@ All notable changes to MedSegAPI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-17
+
+### Added
+
+- **Cloud deployment** — Deployed to Oracle Cloud A1.Flex (ARM64 Ampere, 2 OCPU,
+  12GB RAM) with Docker Compose production stack
+- **Automatic HTTPS** — Caddy reverse proxy with Let's Encrypt auto-provisioned TLS
+  certificates via DuckDNS free domain (lungmedseg.duckdns.org)
+- **Guest API keys** — New key type with configurable usage limits (`--max-uses`),
+  tracked via a per-key counter in `api_keys.json`, returning 403 when exhausted
+- **API key management CLI** — Extended `scripts/create_api_key.py` with `--list`
+  (tabular overview of all keys), `--revoke` (disable a key by name), and
+  `--max-uses` (create guest keys with limited predictions)
+- **Interactive frontend viewer** — Canvas-based viewer with zoom, pan, brightness,
+  contrast, and layer toggle (original / mask / overlay) served at `/`
+- **Production docker-compose** — `docker-compose.prod.yml` with Caddy, API (8GB
+  memory limit), and PostgreSQL; ARM64-aware Dockerfile with CPU-only PyTorch
+
+### Changed
+
+- Dockerfile now copies `README.md` into builder stage (required by hatchling)
+- Default database switched to SQLite (`sqlite:///./data/predictions.db`) for
+  simpler single-node deployment
+- Frontend removed prediction history panel for cleaner UI
+- Frontend default view changed to overlay layer with auto-adjusted brightness/contrast
+
+### Fixed
+
+- Black screen on interactive viewer caused by `contrast=1` being divided by 100
+  in render loop (now defaults to `contrast=120`)
+- Canvas dimensions computed as 0x0 when viewer section was `display:none` during
+  `fitToView()` — now section is shown before image loading
+- Guest key validation returning HTTP 500 when `_persist()` failed due to file
+  permissions — now wrapped in try/except with warning log
+
 ## [1.0.0] - 2026-03-15
 
 ### Added

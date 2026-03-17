@@ -6,12 +6,16 @@
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
+**Live demo:** [https://lungmedseg.duckdns.org](https://lungmedseg.duckdns.org)
+
 A production-grade REST API serving three lung segmentation models (CNN, ViT, and
 Hybrid CNN-ViT) for chest X-ray analysis. Built from a master's thesis that achieved
 96.65% Dice coefficient on the Montgomery dataset, this project demonstrates the full
 MLOps lifecycle: research model training, model registry, containerized API serving,
 CI/CD pipelines, prediction logging, monitoring dashboards, API key authentication,
 rate limiting, and continuous retraining.
+
+Deployed on Oracle Cloud ARM64 (A1.Flex) with automatic HTTPS via Caddy + Let's Encrypt.
 
 ## Architecture
 
@@ -39,11 +43,15 @@ graph LR
     Logger --> DB[(SQLite / PostgreSQL)]
     DB --> Dashboard[Streamlit Dashboard]
 
+    subgraph Deployment
+        Caddy[Caddy Reverse Proxy<br/>Auto HTTPS] --> API
+    end
+
     subgraph CI/CD
         GH[GitHub Actions] --> Lint
         Lint --> Test
         Test --> Build[Docker Build]
-        Build --> Deploy[GHCR / Railway]
+        Build --> Deploy[Oracle Cloud ARM64]
     end
 ```
 
@@ -53,7 +61,7 @@ graph LR
 
 ```bash
 cp .env.example .env                    # configure environment
-docker compose up --build -d            # start API + PostgreSQL
+docker compose up --build -d            # start API + SQLite
 curl http://localhost:8000/api/v1/health # verify
 ```
 
@@ -75,6 +83,13 @@ uv run uvicorn src.api.main:app --reload
 
 The API will be available at `http://localhost:8000`. Interactive docs at `/docs`.
 
+### Frontend
+
+The project includes a single-page web app at `frontend/index.html` served at `/`.
+Upload a chest X-ray, enter your API key, and view the segmentation result in an
+interactive canvas viewer with zoom, pan, brightness, contrast, and layer controls
+(original / mask / overlay).
+
 ## API Documentation
 
 ### Public endpoints (no auth required)
@@ -95,14 +110,35 @@ The API will be available at `http://localhost:8000`. Interactive docs at `/docs
 | GET | `/api/v1/metrics` | Aggregated prediction metrics |
 | GET | `/api/v1/predictions` | Recent prediction history |
 
-### Examples
+### API Key Management
 
-**Generate an API key:**
+Two key types are supported:
+
+- **Master key** — unlimited usage (for production / personal use)
+- **Guest key** — limited to N predictions, tracked via a usage counter (for sharing)
 
 ```bash
-python scripts/create_api_key.py --name "my-client"
-# Save the printed key — it cannot be recovered
+# Create a master key (unlimited)
+python scripts/create_api_key.py --name "production"
+
+# Create a guest key (limited to 5 uses)
+python scripts/create_api_key.py --name "friend-john" --max-uses 5
+
+# Create a one-time key
+python scripts/create_api_key.py --name "demo-user" --max-uses 1
+
+# List all keys (shows name, type, usage, status)
+python scripts/create_api_key.py --list
+
+# Revoke a key by name
+python scripts/create_api_key.py --revoke "friend-john"
 ```
+
+Keys are SHA-256 hashed and stored in `configs/api_keys.json`. The raw key is shown
+once at creation and cannot be recovered. If running in Docker, restart the API
+container after creating or revoking keys so it reloads the key file.
+
+### Examples
 
 **Single prediction:**
 
@@ -267,6 +303,7 @@ Lint (ruff check + format) → Test (pytest + coverage) → Build (Docker)
 ### CD (`cd.yml`) — on push to main
 
 Builds and pushes the Docker image to GitHub Container Registry (`ghcr.io`).
+Production deployment on Oracle Cloud is done manually via `git pull` + `docker compose up --build`.
 
 ### Retrain (`retrain.yml`) — manual trigger
 
@@ -276,13 +313,19 @@ Select a model variant (CNN, ViT, Hybrid) and trigger retraining via `workflow_d
 
 ```
 medseg-api/
-├── Dockerfile                     # Multi-stage production build
-├── docker-compose.yml             # API + PostgreSQL stack
+├── Dockerfile                     # Multi-stage production build (ARM64 + x86_64)
+├── docker-compose.yml             # Dev stack (API + SQLite)
+├── docker-compose.prod.yml        # Prod stack (API + Caddy + PostgreSQL)
+├── Caddyfile                      # Reverse proxy config (auto HTTPS)
 ├── pyproject.toml                 # Dependencies (uv)
 ├── uv.lock
+├── .env.example                   # Environment variable template
 ├── configs/
 │   ├── model_registry.yaml        # Model versions and metrics
-│   └── serving.yaml               # Server and model config
+│   ├── serving.yaml               # Server and model config
+│   └── api_keys.json              # Hashed API keys (.gitignored)
+├── frontend/
+│   └── index.html                 # Interactive web viewer (upload + canvas)
 ├── src/
 │   ├── api/
 │   │   ├── main.py                # FastAPI app factory and lifespan
@@ -304,7 +347,8 @@ medseg-api/
 │   │   │   ├── vit_model.py       # DeiT-Tiny + Decoder
 │   │   │   └── hybrid_model.py    # CNN-ViT + Cross-Attention
 │   │   ├── registry.py            # Model versioning and hot-swap
-│   │   └── inference.py           # Image preprocessing and prediction
+│   │   ├── inference.py           # Image preprocessing and prediction
+│   │   └── explainability.py      # Grad-CAM / SHAP interpretability
 │   ├── training/
 │   │   ├── trainer.py             # Training loop
 │   │   ├── dataset.py             # CXR dataset loader
@@ -322,8 +366,8 @@ medseg-api/
 │       ├── dicom.py               # DICOM file handling
 │       └── image.py               # Image processing utilities
 ├── scripts/
-│   ├── create_api_key.py          # Generate API keys
-│   ├── setup_models.py            # Download/migrate model weights
+│   ├── create_api_key.py          # Generate/list/revoke API keys
+│   ├── setup_models.py            # Copy thesis weights + validate
 │   ├── train.py                   # Training entrypoint
 │   ├── retrain.py                 # Continuous retraining
 │   ├── evaluate.py                # Model evaluation
@@ -331,7 +375,9 @@ medseg-api/
 │   ├── export_onnx.py             # Export to ONNX format
 │   ├── download_data.py           # Dataset download
 │   ├── preprocess_data.py         # Data preprocessing
-│   └── add_new_data.py            # Add new training data
+│   ├── add_new_data.py            # Add new training data
+│   ├── predict_and_save.py        # Batch prediction with output saving
+│   └── deploy.sh                  # Deployment automation
 ├── monitoring/
 │   └── streamlit_app.py           # Monitoring dashboard
 ├── tests/                         # 152 tests (pytest + pytest-asyncio)
@@ -346,6 +392,69 @@ medseg-api/
     ├── ci.yml                     # Lint → Test → Build
     ├── cd.yml                     # Docker push to GHCR
     └── retrain.yml                # Manual retraining trigger
+```
+
+## Deployment (Oracle Cloud)
+
+The production deployment runs on an Oracle Cloud A1.Flex instance (ARM64 Ampere)
+with Docker Compose orchestrating three services: Caddy (reverse proxy + auto HTTPS),
+the FastAPI application, and PostgreSQL.
+
+### Infrastructure
+
+| Component | Details |
+|-----------|---------|
+| **Instance** | VM.Standard.A1.Flex, 2 OCPU, 12GB RAM |
+| **OS** | Ubuntu 22.04 (aarch64) |
+| **Domain** | lungmedseg.duckdns.org (DuckDNS free DNS) |
+| **HTTPS** | Automatic via Caddy + Let's Encrypt |
+| **Docker** | Multi-stage build, CPU-only PyTorch for ARM64 |
+| **Storage** | SQLite for prediction logging, JSON for API keys |
+
+### Deploy / Update
+
+```bash
+# SSH to the server
+ssh -i ~/.ssh/ssh-key-2026-03-17.key ubuntu@140.245.113.52
+
+# Pull and rebuild
+cd ~/medseg-api
+git pull
+sudo docker compose -f docker-compose.prod.yml up -d --build api
+```
+
+### Manage API Keys on Server
+
+```bash
+# Create a guest key for a friend (3 uses)
+python3 scripts/create_api_key.py --name "friend-name" --max-uses 3
+
+# Always restart after creating/revoking keys
+sudo docker compose -f docker-compose.prod.yml restart api
+
+# List all keys
+python3 scripts/create_api_key.py --list
+```
+
+### Production Stack (`docker-compose.prod.yml`)
+
+```
+Caddy (:80/:443) --> API (:8000) --> SQLite + Model Registry
+                                 --> /app/configs (API keys)
+                                 --> /app/models (weights, read-only)
+```
+
+- **Caddy** — terminates TLS, reverse proxies to API, gzip, security headers, 20MB upload limit
+- **API** — FastAPI + PyTorch (CPU), 8GB memory limit, healthcheck on `/api/v1/health`
+- **PostgreSQL** — available but API currently uses SQLite for prediction logging
+
+### File Permissions
+
+The configs directory must be writable by the container for guest key usage counters:
+
+```bash
+sudo chmod 777 configs/
+sudo chmod 666 configs/api_keys.json
 ```
 
 ## Development
