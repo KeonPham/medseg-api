@@ -105,7 +105,13 @@ class APIKeyValidator:
                 )
             # Increment counter and persist
             key_entry["used"] = used + 1
-            self._persist()
+            try:
+                self._persist()
+            except OSError:
+                logger.warning(
+                    "Could not persist usage counter for '%s' (file permission issue?)",
+                    key_entry.get("name"),
+                )
             logger.info(
                 "Guest key '%s' used %d/%d",
                 key_entry.get("name"), used + 1, max_uses,
