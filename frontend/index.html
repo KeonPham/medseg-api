@@ -645,15 +645,15 @@
             <div class="toolbar-slider-group">
                 <label>Brightness</label>
                 <input type="range" class="toolbar-slider" id="brightnessSlider"
-                       min="-100" max="100" value="0">
-                <span class="toolbar-value" id="brightnessVal">0</span>
+                       min="-100" max="100" value="20">
+                <span class="toolbar-value" id="brightnessVal">20</span>
             </div>
 
             <div class="toolbar-slider-group">
                 <label>Contrast</label>
                 <input type="range" class="toolbar-slider" id="contrastSlider"
-                       min="50" max="200" value="100">
-                <span class="toolbar-value" id="contrastVal">1.0</span>
+                       min="50" max="200" value="120">
+                <span class="toolbar-value" id="contrastVal">1.2</span>
             </div>
 
             <div class="toolbar-separator"></div>
@@ -802,8 +802,8 @@
             this.lastY = 0;
             this.images = {};      // name -> Image object
             this.baseSize = null;  // {w, h} of original image
-            this.brightness = 0;
-            this.contrast = 1;
+            this.brightness = 20;
+            this.contrast = 120;
             this.invert = false;
 
             this._setupEvents();
@@ -861,8 +861,15 @@
 
         fitToView() {
             if (!this.baseSize) return;
+            // Re-measure canvas in case it was hidden before
+            const rect = this.canvas.parentElement.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+            }
             const cw = this.canvas.width;
             const ch = this.canvas.height;
+            if (cw === 0 || ch === 0) return; // still hidden, skip
             const scaleX = cw / this.baseSize.w;
             const scaleY = ch / this.baseSize.h;
             // Fill 96% of the canvas — image should be large and prominent
@@ -873,13 +880,13 @@
         }
 
         resetView() {
-            this.brightness = 0;
-            this.contrast = 1;
+            this.brightness = 20;
+            this.contrast = 120;
             this.invert = false;
-            $('brightnessSlider').value = 0;
-            $('brightnessVal').textContent = '0';
-            $('contrastSlider').value = 100;
-            $('contrastVal').textContent = '1.0';
+            $('brightnessSlider').value = 20;
+            $('brightnessVal').textContent = '20';
+            $('contrastSlider').value = 120;
+            $('contrastVal').textContent = '1.2';
             this.fitToView();
         }
 
@@ -1218,6 +1225,13 @@
 
     // ─── Display Results ───
     async function displayResults(data) {
+        // IMPORTANT: Show the viewer section FIRST so the canvas gets real dimensions
+        viewerSection.classList.remove('hidden');
+        metricsSection.classList.remove('hidden');
+
+        // Give the browser a frame to layout the now-visible canvas
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         // Load images into viewer
         const loads = [];
 
@@ -1251,11 +1265,13 @@
 
         await Promise.all(loads);
 
-        // Set active layer to original
-        state.activeLayer = 'original';
+        // Default to overlay view so segmentation result is immediately visible
+        state.activeLayer = 'overlay';
         document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.layer-btn[data-layer="original"]').classList.add('active');
-        $('opacityGroup').style.display = 'none';
+        document.querySelector('.layer-btn[data-layer="overlay"]').classList.add('active');
+        $('opacityGroup').style.display = 'flex';
+        $('opacitySlider').value = 40;
+        $('opacityVal').textContent = '40%';
 
         viewer.resetView();
 
@@ -1311,9 +1327,7 @@
 
         $('mSize').textContent = `${data.image_size.width}x${data.image_size.height}`;
 
-        // Show sections
-        viewerSection.classList.remove('hidden');
-        metricsSection.classList.remove('hidden');
+        // Scroll to viewer
         viewerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
