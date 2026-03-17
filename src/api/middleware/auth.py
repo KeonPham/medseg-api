@@ -13,26 +13,12 @@ DEFAULT_KEYS_PATH = Path("configs/api_keys.json")
 
 
 def _hash_key(api_key: str) -> str:
-    """Return the SHA-256 hex digest of an API key.
-
-    Args:
-        api_key: The raw API key string.
-
-    Returns:
-        Hex-encoded SHA-256 hash.
-    """
+    """Return the SHA-256 hex digest of an API key."""
     return hashlib.sha256(api_key.encode()).hexdigest()
 
 
 def _load_keys(path: Path = DEFAULT_KEYS_PATH) -> dict[str, dict]:
-    """Load the API key registry from a JSON file.
-
-    Args:
-        path: Path to the JSON file containing hashed keys.
-
-    Returns:
-        Dict mapping key hashes to their metadata.
-    """
+    """Load the API key registry from a JSON file."""
     if not path.exists():
         logger.warning("API keys file not found: %s", path)
         return {}
@@ -41,12 +27,20 @@ def _load_keys(path: Path = DEFAULT_KEYS_PATH) -> dict[str, dict]:
     return data.get("keys", {})
 
 
+def _save_keys(path: Path, keys: dict[str, dict]) -> None:
+    """Persist the key registry back to disk."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"keys": keys}, f, indent=2)
+        f.write("\n")
+
+
 class APIKeyValidator:
     """Callable FastAPI dependency that validates X-API-Key headers.
 
-    Args:
-        keys_path: Path to the JSON file containing hashed API keys.
-        enabled: When False, authentication is bypassed (dev mode).
+    Supports two key types:
+    - **master**: unlimited usage (no ``max_uses`` field or ``max_uses: null``)
+    - **guest**: limited to ``max_uses`` predictions, tracked via ``used`` counter
     """
 
     def __init__(
@@ -68,17 +62,19 @@ class APIKeyValidator:
         """Public method to force a key reload (e.g. after adding a new key)."""
         self._reload_keys()
 
+    def _persist(self) -> None:
+        """Write current key state to disk (for usage counter updates)."""
+        _save_keys(self._keys_path, self._keys)
+
     def validate(self, api_key: str) -> str:
         """Validate an API key string.
-
-        Args:
-            api_key: The raw API key.
 
         Returns:
             The client name associated with the key.
 
         Raises:
             HTTPException: 401 if the key is invalid or disabled.
+            HTTPException: 403 if a guest key has exhausted its usage limit.
         """
         if not self._enabled:
             return "anonymous"
@@ -93,6 +89,27 @@ class APIKeyValidator:
         if not key_entry.get("active", True):
             logger.warning("Rejected disabled API key: %s", key_entry.get("name"))
             raise HTTPException(status_code=401, detail="API key is disabled")
+
+        # Check usage limit for guest keys
+        max_uses = key_entry.get("max_uses")
+        if max_uses is not None:
+            used = key_entry.get("used", 0)
+            if used >= max_uses:
+                logger.warning(
+                    "Guest key '%s' exhausted (%d/%d)",
+                    key_entry.get("name"), used, max_uses,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"API key usage limit reached ({used}/{max_uses}). Contact the admin for a new key.",
+                )
+            # Increment counter and persist
+            key_entry["used"] = used + 1
+            self._persist()
+            logger.info(
+                "Guest key '%s' used %d/%d",
+                key_entry.get("name"), used + 1, max_uses,
+            )
 
         return key_entry.get("name", "unknown")
 
