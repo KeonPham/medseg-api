@@ -476,31 +476,6 @@
 
         .btn-download:hover { border-color: var(--primary); color: var(--primary); }
 
-        /* ─── History ─── */
-        .history-section { margin-top: 28px; }
-        .history-section.hidden { display: none; }
-
-        .history-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
-        }
-
-        .history-card {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius); overflow: hidden;
-            cursor: pointer; transition: border-color 0.2s;
-        }
-
-        .history-card:hover { border-color: var(--primary); }
-
-        .history-card-info {
-            padding: 8px 10px; font-size: 11px; color: var(--text-dim);
-        }
-
-        .history-card-info strong {
-            color: var(--text); font-size: 12px; display: block; margin-bottom: 2px;
-        }
 
         /* ─── Footer ─── */
         footer {
@@ -746,11 +721,6 @@
         </div>
     </section>
 
-    <!-- History -->
-    <section class="history-section hidden" id="historySection">
-        <div class="section-title">Prediction History</div>
-        <div class="history-grid" id="historyGrid"></div>
-    </section>
 </main>
 
 <footer>
@@ -771,7 +741,6 @@
         selectedFile: null,
         previewUrl: null,
         isLoading: false,
-        history: JSON.parse(localStorage.getItem('medseg_history') || '[]'),
         lastResult: null,
         activeLayer: 'original',
         invert: false,
@@ -787,7 +756,6 @@
     const btnPredict = $('btnPredict');
     const viewerSection = $('viewerSection');
     const metricsSection = $('metricsSection');
-    const historySection = $('historySection');
 
     // ─── Image Viewer ───
     class ImageViewer {
@@ -1107,7 +1075,6 @@
     apiKeyInput.value = state.apiKey;
     checkHealth();
     setInterval(checkHealth, 30000);
-    renderHistory();
 
     // ─── API Key ───
     apiKeyInput.addEventListener('input', () => {
@@ -1211,7 +1178,6 @@
             const data = await res.json();
             state.lastResult = data;
             await displayResults(data);
-            addToHistory(data);
             toast('Segmentation complete!', 'success');
 
         } catch (err) {
@@ -1498,35 +1464,6 @@
                 <p><strong style="color:var(--text);">GradCAM:</strong> Shows which image regions most influenced the model's decision. Warm areas had the strongest impact on the segmentation output.</p>
             </div>
         `;
-    }
-
-    // ─── History ───
-    function addToHistory(data) {
-        const entry = {
-            name: state.selectedFile.name,
-            model: data.model_name,
-            confidence: data.metrics.confidence_score,
-            time_ms: data.inference_time_ms,
-            ts: new Date().toISOString()
-        };
-        state.history.unshift(entry);
-        if (state.history.length > 12) state.history.pop();
-        localStorage.setItem('medseg_history', JSON.stringify(state.history));
-        renderHistory();
-    }
-
-    function renderHistory() {
-        if (state.history.length === 0) { historySection.classList.add('hidden'); return; }
-        historySection.classList.remove('hidden');
-        const grid = $('historyGrid');
-        grid.innerHTML = state.history.map(h => `
-            <div class="history-card">
-                <div class="history-card-info">
-                    <strong>${escapeHtml(h.name)}</strong>
-                    ${escapeHtml(h.model)} &middot; ${(h.confidence * 100).toFixed(0)}% conf &middot; ${h.time_ms.toFixed(0)}ms
-                </div>
-            </div>
-        `).join('');
     }
 
     // ─── Utilities ───
