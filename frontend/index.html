@@ -272,7 +272,7 @@
         .viewer-canvas-wrap {
             flex: 1; min-width: 0;
             position: relative;
-            background: #000;
+            background: #0a0a0a;
             border: 1px solid var(--border);
             border-top: none;
             border-radius: 0 0 0 var(--radius);
@@ -280,7 +280,7 @@
         }
 
         .viewer-canvas {
-            display: block; width: 100%; height: 600px;
+            display: block; width: 100%; height: 70vh; min-height: 500px; max-height: 800px;
             cursor: grab;
         }
 
@@ -310,7 +310,7 @@
             border-top: none; border-left: none;
             border-radius: 0 0 var(--radius) 0;
             display: flex; flex-direction: column;
-            max-height: 600px;
+            max-height: 70vh;
             overflow: hidden;
         }
 
@@ -553,7 +553,7 @@
                 border-radius: 0 0 var(--radius) var(--radius);
             }
             .viewer-canvas-wrap { border-radius: 0; }
-            .viewer-canvas { height: 400px; }
+            .viewer-canvas { height: 60vh; min-height: 350px; }
             .metrics-grid { grid-template-columns: repeat(3, 1fr); }
             .toolbar-slider { width: 60px; }
         }
@@ -817,6 +817,7 @@
                     this.images[name] = img;
                     if (name === 'original') {
                         this.baseSize = { w: img.naturalWidth, h: img.naturalHeight };
+                        this._autoAdjustBrightness(img);
                         this.fitToView();
                     }
                     resolve();
@@ -826,13 +827,46 @@
             });
         }
 
+        _autoAdjustBrightness(img) {
+            // Sample the image to detect if it's dark, then auto-boost
+            const tmp = document.createElement('canvas');
+            const sz = 64; // sample at 64x64
+            tmp.width = sz; tmp.height = sz;
+            const tctx = tmp.getContext('2d');
+            tctx.drawImage(img, 0, 0, sz, sz);
+            const data = tctx.getImageData(0, 0, sz, sz).data;
+            let sum = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                sum += (data[i] + data[i+1] + data[i+2]) / 3;
+            }
+            const avgBrightness = sum / (sz * sz);
+            // If average brightness is below 80 (dark image), boost it
+            if (avgBrightness < 80) {
+                const boost = Math.round(Math.min(50, (80 - avgBrightness) * 0.8));
+                this.brightness = boost;
+                this.contrast = 120;
+                $('brightnessSlider').value = boost;
+                $('brightnessVal').textContent = String(boost);
+                $('contrastSlider').value = 120;
+                $('contrastVal').textContent = '1.2';
+            } else {
+                this.brightness = 0;
+                this.contrast = 100;
+                $('brightnessSlider').value = 0;
+                $('brightnessVal').textContent = '0';
+                $('contrastSlider').value = 100;
+                $('contrastVal').textContent = '1.0';
+            }
+        }
+
         fitToView() {
             if (!this.baseSize) return;
             const cw = this.canvas.width;
             const ch = this.canvas.height;
             const scaleX = cw / this.baseSize.w;
             const scaleY = ch / this.baseSize.h;
-            this.scale = Math.min(scaleX, scaleY) * 0.92;
+            // Fill 96% of the canvas — image should be large and prominent
+            this.scale = Math.min(scaleX, scaleY) * 0.96;
             this.offsetX = (cw - this.baseSize.w * this.scale) / 2;
             this.offsetY = (ch - this.baseSize.h * this.scale) / 2;
             this.render();

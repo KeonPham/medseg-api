@@ -9,8 +9,8 @@ WORKDIR /app
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Copy dependency files + README (hatchling needs it)
+COPY pyproject.toml uv.lock README.md ./
 
 # Install production dependencies (no dev group)
 RUN uv sync --no-dev --frozen
@@ -47,8 +47,9 @@ COPY src/ src/
 COPY configs/ configs/
 COPY frontend/ frontend/
 
-# Create non-root user
-RUN groupadd --system appuser && useradd --system --gid appuser appuser \
+# Create non-root user and data directory
+RUN mkdir -p /app/data \
+    && groupadd --system appuser && useradd --system --gid appuser appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
